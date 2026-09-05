@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 // ログイン前でも配ってよいファイル（データを含まないもの）
-const PUBLIC_FILES = new Set(['/login.html', '/login.js', '/styles.css', '/favicon.ico', '/lp.html', '/lp.js', '/lp-thanks.html']);
+const PUBLIC_FILES = new Set(['/login.html', '/login.js', '/styles.css', '/favicon.ico', '/lp.html', '/lp.js', '/lp-thanks.html', '/robots.txt', '/sitemap.xml', '/og.png']);
 const LP_PAGES = new Set(['/lp.html', '/lp-thanks.html']);
 
 // LP だけは広告計測タグ（GTM / Google 広告 / GA4 / Meta）を許可する

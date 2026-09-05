@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /lp.html
+Allow: /lp.js
+Allow: /styles.css
+Disallow: /login.html
+Disallow: /lp-thanks.html
+Disallow: /api/
+Disallow: /
+Sitemap: https://diglead.onrender.com/sitemap.xml
