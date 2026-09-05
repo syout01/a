@@ -21,3 +21,6 @@ services:
       # 招待リンクに使う外部 URL。独自ドメインを付けたらここを変える
       - key: APP_URL
         sync: false
+      # Google タグマネージャー（LP と完了ページに差し込む）
+      - key: GTM_ID
+        value: GTM-MZRT4TLG
