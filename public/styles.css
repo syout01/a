@@ -82,3 +82,34 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 .me button:hover { background: #1f2937; }
 .linkbox { display: flex; gap: 6px; margin-top: 6px; }
 .linkbox input { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+/* ---- mobile ---- */
+@media (max-width: 700px) {
+  .topbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .topbar-controls { width: 100%; justify-content: space-between; gap: 8px; }
+  .topbar-controls label { flex: 1; min-width: 0; }
+  .topbar-controls select { max-width: 100%; min-width: 0; flex: 1; }
+  .tabs { padding: 0 8px; }
+  .tabs a { padding: 10px 10px; font-size: 13px; }
+  .view { padding: 12px; }
+  .card { padding: 12px 12px; border-radius: 8px; }
+  .row { gap: 8px; }
+  .row input[type=text], .row select { max-width: 100%; }
+  .cond-row { grid-template-columns: 1fr 1fr; }
+  .cond-row > div:nth-child(3) { grid-column: 1 / -1; }
+  .cond-row > button { grid-column: 2; justify-self: end; }
+  .rule-head input[type=text] { min-width: 0; flex: 1 1 100%; }
+  .status-buttons button { flex: 1 1 45%; }
+  .detail dl { grid-template-columns: 76px 1fr; }
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpi .v { font-size: 20px; }
+  .dropzone { padding: 18px; }
+  .follow-layout { gap: 12px; }
+  #followTable table th:nth-child(3), #followTable table td:nth-child(3),
+  #followTable table th:nth-child(7), #followTable table td:nth-child(7) { display: none; }
+  .me { font-size: 12px; }
+}
+@media (max-width: 480px) {
+  .brand { font-size: 14px; }
+  .brand span { display: none; }
+}

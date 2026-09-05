@@ -139,6 +139,58 @@ section+section{border-top:1px solid var(--line)}
 .cta p{color:var(--muted);max-width:52ch;margin:0 auto 20px}
 footer{padding:28px 0 56px;font-size:12.5px;color:var(--muted)}
 footer .co{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;max-width:560px;margin-top:8px}
+/* ---- mobile ---- */
+@media (max-width:640px){
+  body{font-size:15px}
+  .container{padding:0 18px}
+  section{padding:44px 0}
+  h2{font-size:24px}
+  .lede{font-size:15.5px}
+  .top{padding:14px 0;gap:10px}
+  .top .logo span{display:none}
+  .top .btn{padding:8px 12px;font-size:13px}
+  .top .btn:not(.primary){display:none}
+  .hero{padding:24px 0 44px;gap:28px}
+  .hero h1{font-size:31px}
+  .hero .sub{font-size:15.5px;margin:14px 0 20px}
+  .hero .ctas .btn{width:100%;text-align:center}
+  .facts{gap:14px 20px;margin-top:22px}
+  .fact b{font-size:20px}
+  .mock{border-radius:12px}
+  .mock .filters{flex-wrap:wrap;gap:4px 6px}
+  .mock table{table-layout:fixed}
+  .mock td{padding:8px 8px}
+  .mock td:nth-child(1){width:92px}
+  .mock td:nth-child(4){display:none}
+  .mock td.st{white-space:normal}
+  .mock td.co b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mock td.co small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mock .seg{font-size:10px;padding:0 6px}
+  .mock .foot{flex-direction:column;gap:8px;align-items:flex-start}
+  .prob{padding:16px 16px}
+  .prob .k{font-size:20px}
+  .step{padding:14px}
+  .feat{padding:14px}
+  .chart{gap:24px}
+  .bars{grid-template-columns:1fr auto;gap:6px 12px}
+  .bars .lab{grid-column:1/-1;margin-top:8px}
+  .bars .val{min-width:0;font-size:14px}
+  .bars .val small{display:inline;margin-left:4px}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:12px}
+  .kpi b{font-size:22px}
+  .two{gap:24px}
+  .matrix{grid-template-columns:56px repeat(3,1fr);gap:4px}
+  .matrix .cell{padding:12px 4px;font-size:16px}
+  .sec{gap:4px}
+  .price th,.price td{padding:10px 8px;font-size:13.5px}
+  .price td.v{white-space:normal}
+  .cta{padding:26px 18px;border-radius:12px}
+  .cta h2{font-size:22px}
+  .cta .btn{display:block;width:100%;text-align:center;margin:0 0 8px}
+  footer .co{grid-template-columns:1fr;gap:0}
+  footer .co span:nth-child(odd){font-weight:700;margin-top:6px}
+}
 </style>
 </head>
 <body>
