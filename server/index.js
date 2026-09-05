@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 // ログイン前でも配ってよいファイル（データを含まないもの）
-const PUBLIC_FILES = new Set(['/login.html', '/login.js', '/styles.css', '/favicon.ico']);
+const PUBLIC_FILES = new Set(['/login.html', '/login.js', '/styles.css', '/favicon.ico', '/lp.html']);
 
 export function createApp(db) {
   const app = express();

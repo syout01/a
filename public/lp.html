@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="展示会の名刺を翌営業日から商談に。バーコードで取ったリストの取り込み・自動振り分け・担当割当・架電フォロー・進捗・書き出しを 1 つにした DigLead のフォロー管理ツール。">
+<title>DigLead フォロー管理</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F3F5F8;--panel:#FFFFFF;--ink:#101828;--muted:#5B6472;--line:#DCE1E9;--soft:#E9EEF8;
+  --accent:#1F4FD8;--accent-ink:#163CA6;--accent-soft:#D9E2FB;--amber:#C97A0C;
+  --navy:#0F1A2E;--navy-ink:#E8ECF5;--navy-muted:#9AA6BD;--navy-line:#26334D;
+  --segA:#D9534F;--segB:#E09B2D;--segC:#3FA7C4;--segX:#8A8F98;
+  --sans:"Noto Sans JP",-apple-system,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif;
+  --disp:"Zen Kaku Gothic New","Noto Sans JP","Hiragino Sans",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0C1017;--panel:#141A24;--ink:#E7EAF0;--muted:#98A1B0;--line:#28303E;--soft:#1A2333;
+  --accent:#7B9BFF;--accent-ink:#A8BDFF;--accent-soft:#1E2A47;--amber:#F0B45A;
+  --navy:#070B12;--navy-ink:#E8ECF5;--navy-muted:#9AA6BD;--navy-line:#1F2A40;}}
+:root[data-theme="dark"]{
+  --bg:#0C1017;--panel:#141A24;--ink:#E7EAF0;--muted:#98A1B0;--line:#28303E;--soft:#1A2333;
+  --accent:#7B9BFF;--accent-ink:#A8BDFF;--accent-soft:#1E2A47;--amber:#F0B45A;
+  --navy:#070B12;--navy-ink:#E8ECF5;--navy-muted:#9AA6BD;--navy-line:#1F2A40;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.85}
+a{color:var(--accent-ink)}
+.container{max-width:1120px;margin:0 auto;padding:0 24px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+h1,h2,h3{font-family:var(--disp);text-wrap:balance;line-height:1.3;margin:0}
+h2{font-size:30px;font-weight:700;margin:8px 0 14px}
+h3{font-size:17px;font-weight:700;margin:0 0 6px}
+p{margin:0 0 12px}
+.lede{font-size:17px;color:var(--muted);max-width:56ch}
+section{padding:72px 0}
+section+section{border-top:1px solid var(--line)}
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.logo{font-family:var(--disp);font-weight:900;font-size:20px;letter-spacing:.02em}
+.logo span{font-weight:500;color:var(--muted);font-size:13px;margin-left:10px}
+.btn{display:inline-block;padding:11px 20px;border-radius:8px;font-weight:700;text-decoration:none;border:1px solid var(--line);color:var(--ink);background:var(--panel)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-ink)}
+.btn+.btn{margin-left:8px}
+/* hero */
+.hero{padding:56px 0 72px;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:48px;align-items:center}
+@media (max-width:940px){.hero{grid-template-columns:1fr}}
+.hero h1{font-size:44px;font-weight:900;letter-spacing:-.01em}
+.hero h1 em{font-style:normal;color:var(--accent)}
+.hero .sub{font-size:17px;color:var(--muted);margin:18px 0 26px;max-width:52ch}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:8px}
+.hero .ctas .btn+.btn{margin-left:0}
+.facts{display:flex;gap:24px;margin-top:28px;flex-wrap:wrap}
+.fact b{display:block;font-family:var(--disp);font-size:24px;line-height:1.1}
+.fact span{font-size:12px;color:var(--muted)}
+/* mock */
+.mock{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 20px 60px rgba(16,24,40,.10);overflow:hidden}
+.mock .bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--navy);color:var(--navy-ink);font-size:12px}
+.mock .bar .dot{width:9px;height:9px;border-radius:50%;background:var(--navy-line)}
+.mock .bar b{font-family:var(--disp);margin-left:6px}
+.mock .filters{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px}
+.mock .filters span{border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--muted)}
+.mock .filters span.on{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent;font-weight:700}
+.mock table{width:100%;border-collapse:collapse;font-size:12.5px}
+.mock td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.mock tr.sel td{background:var(--soft)}
+.mock td.co b{display:block;font-size:13px}
+.mock td.co small{color:var(--muted)}
+.mock .seg{display:inline-block;color:#fff;border-radius:999px;padding:0 8px;font-size:11px;font-weight:700;line-height:18px;white-space:nowrap}
+.A{background:var(--segA)}.B{background:var(--segB)}.C{background:var(--segC)}.X{background:var(--segX)}
+.mock .st{color:var(--muted);white-space:nowrap}
+.mock .due{color:var(--segA);font-weight:700;white-space:nowrap}
+.mock .foot{padding:10px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.mock .foot .go{background:var(--accent);color:#fff;border-radius:6px;padding:3px 10px;font-weight:700}
+/* problems */
+.threes{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+@media (max-width:800px){.threes{grid-template-columns:1fr}}
+.prob{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px}
+.prob .k{font-family:var(--disp);font-size:24px;font-weight:900;color:var(--amber)}
+.prob .was{color:var(--muted);font-size:14px;margin:6px 0 12px;padding-bottom:12px;border-bottom:1px dashed var(--line)}
+.prob .now{font-size:14.5px}
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:24px;counter-reset:step}
+@media (max-width:1000px){.flow{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:600px){.flow{grid-template-columns:1fr}}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 18px;position:relative}
+.step .n{font-family:var(--mono);font-size:12px;color:var(--accent-ink);letter-spacing:.08em}
+.step h3{font-size:16px;margin:4px 0 6px}
+.step p{font-size:13.5px;color:var(--muted);margin:0}
+/* features */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px}
+@media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:600px){.grid{grid-template-columns:1fr}}
+.feat{padding:18px 18px 16px;border-top:2px solid var(--accent);background:var(--panel);border-radius:0 0 10px 10px}
+.feat p{font-size:14px;color:var(--muted);margin:0}
+/* numbers (bold block) */
+.numbers{background:var(--navy);color:var(--navy-ink);border-top:0}
+.numbers .eyebrow{color:var(--navy-muted)}
+.numbers h2{color:#fff}
+.numbers .lede{color:var(--navy-muted)}
+.chart{margin-top:28px;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:40px;align-items:start}
+@media (max-width:900px){.chart{grid-template-columns:1fr}}
+.bars{display:grid;grid-template-columns:auto 1fr auto;gap:12px 14px;align-items:center;font-size:14px}
+.bars .lab{color:var(--navy-ink);white-space:nowrap}
+.bars .lab small{display:block;color:var(--navy-muted);font-size:12px}
+.bars .track{height:14px;background:var(--navy-line);border-radius:4px;overflow:hidden}
+.bars .track i{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--navy-muted)}
+.bars .track i.hi{background:#7B9BFF}
+.bars .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;text-align:right;color:#fff;min-width:130px;white-space:nowrap}
+.bars .val small{display:block;font-family:var(--sans);font-size:11px;color:var(--navy-muted)}
+.chart-note{font-size:12.5px;color:var(--navy-muted);margin-top:14px;grid-column:1/-1}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kpi{border:1px solid var(--navy-line);border-radius:10px;padding:14px 16px}
+.kpi b{display:block;font-family:var(--disp);font-size:28px;line-height:1.1;color:#fff}
+.kpi span{font-size:12.5px;color:var(--navy-muted)}
+/* rank matrix */
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:center}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.matrix{display:grid;grid-template-columns:96px repeat(3,1fr);gap:6px;font-size:13px}
+.matrix .h{font-size:12px;color:var(--muted);text-align:center;align-self:end;padding-bottom:4px}
+.matrix .r{font-size:12px;color:var(--muted);align-self:center}
+.matrix .cell{border-radius:8px;padding:16px 8px;text-align:center;color:#fff;font-family:var(--disp);font-weight:900;font-size:20px;line-height:1}
+/* security */
+.sec{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 28px;margin-top:18px;font-size:14.5px}
+@media (max-width:700px){.sec{grid-template-columns:1fr}}
+.sec div{padding:10px 0;border-bottom:1px solid var(--line)}
+.sec b{display:block;font-family:var(--disp)}
+/* pricing */
+.price{width:100%;border-collapse:collapse;margin-top:18px;font-size:14.5px}
+.price th,.price td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.price th{font-family:var(--disp);background:var(--soft)}
+.price td.v{font-family:var(--mono);white-space:nowrap}
+.tablewrap{overflow-x:auto}
+/* cta */
+.cta{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:40px;text-align:center}
+.cta h2{font-size:28px}
+.cta p{color:var(--muted);max-width:52ch;margin:0 auto 20px}
+footer{padding:28px 0 56px;font-size:12.5px;color:var(--muted)}
+footer .co{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;max-width:560px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="top">
+    <div class="logo">DigLead<span>展示会リード フォロー管理</span></div>
+    <div><a class="btn" href="https://synapse-work.com/diglead">DigLead について</a><a class="btn primary" href="https://diglead.onrender.com/">ツールにログイン</a></div>
+  </div>
+
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Exhibition lead follow-up, from the next business day</div>
+      <h1 style="margin-top:10px">展示会の名刺を、<br><em>翌営業日から</em>商談に変える。</h1>
+      <p class="sub">バーコードで取った来場者リストを取り込んだ瞬間に「誰から・どの順で・何をするか」を決め、担当者は上から順に電話して結果を記録するだけ。フォローの「遅い・浅い・続かない」を、仕組みでなくします。</p>
+      <div class="ctas"><a class="btn primary" href="https://diglead.onrender.com/">ツールを開く</a><a class="btn" href="#flow">できることを見る</a></div>
+      <div class="facts">
+        <div class="fact"><b>翌営業日</b><span>取り込みから架電開始まで</span></div>
+        <div class="fact"><b>2 週間</b><span>全件クローズの目安</span></div>
+        <div class="fact"><b>3 回目まで</b><span>アポの 95% が取れる架電回数</span></div>
+      </div>
+    </div>
+    <div class="mock" aria-label="今日やるリストの画面例">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><b>DigLead</b> ④ フォロー ・ 今日やるリスト</div>
+      <div class="filters"><span class="on">今日やるリスト</span><span>期限切れ</span><span>すべて</span><span>担当：橋本</span><span>8 件</span></div>
+      <table>
+        <tr class="sel"><td><span class="seg A">A：即架電</span></td><td class="co"><b>ゼータ工業株式会社</b><small>伊藤 大輔 ・ 代表取締役社長</small></td><td class="st">未着手</td><td class="st">052-666-7777</td></tr>
+        <tr><td><span class="seg A">A：即架電</span></td><td class="co"><b>イオタ不動産</b><small>中村 亮 ・ 部長 ・ 過去接触あり</small></td><td class="st">架電中</td><td class="due">再コール 9/8 10:00</td></tr>
+        <tr><td><span class="seg B">B：1週間以内</span></td><td class="co"><b>カッパ物流株式会社</b><small>小林 拓也 ・ 係長</small></td><td class="st">未着手</td><td class="st">045-1010-2020</td></tr>
+        <tr><td><span class="seg B">B：1週間以内</span></td><td class="co"><b>ロー人材株式会社</b><small>林 翔 ・ 課長 ・ 他社と比較中</small></td><td class="st">資料送付</td><td class="st">再コール 9/10 15:00</td></tr>
+        <tr><td><span class="seg C">C：余力があれば</span></td><td class="co"><b>タウ自動車販売</b><small>清水 健太 ・ 店長</small></td><td class="st">未着手</td><td class="st">022-9090-1212</td></tr>
+      </table>
+      <div class="foot"><span>ステータス → 次回コール → メモ 1 行</span><span class="go">記録して次へ</span></div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="container">
+    <div class="eyebrow">Why follow-ups stall</div>
+    <h2>展示会のあとが失速する、3 つの理由</h2>
+    <p class="lede">1 回の出展には 150〜500 万円がかかりますが、成否を決めるのは閉会後の 2 週間です。多くの現場で、フォローは次の 3 つのどれかで止まります。</p>
+    <div class="threes">
+      <div class="prob"><div class="k">遅い</div><div class="was">名刺の整理と優先順位づけに時間がかかり、着手まで平均 2 週間。</div><div class="now"><b>取り込んだ瞬間に振り分け。</b>主催者 CSV でもスキャンアプリの出力でも、役職・アンケート・ブースメモからルールで A/B/C に分け、翌営業日には「今日やるリスト」ができています。</div></div>
+      <div class="prob"><div class="k">浅い</div><div class="was">誰が決裁者で、誰が情報収集だけかが分からず、全員に同じ対応。</div><div class="now"><b>決裁関与 × 温度で優先順位。</b>「導入権限がある」「部長クラス」「見積もり希望」が上に来て、同業・学生は自動で外れます。過去の展示会で接触した人は前回の状況つきで表示。</div></div>
+      <div class="prob"><div class="k">続かない</div><div class="was">1 周かけて不通なら終わり。誰がどこまでやったか残らない。</div><div class="now"><b>次回コールが自動で戻ってくる。</b>不在なら再コール日時を入れるだけで、その日のリストに再び並びます。期限切れは赤で拾え、全接触が履歴に残ります。</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="flow">
+  <div class="container">
+    <div class="eyebrow">What it does</div>
+    <h2>取り込みから書き出しまで、6 ステップ</h2>
+    <p class="lede">管理者は ①〜③ を展示会の翌営業日に 15 分で。担当者は毎日 ④ を上から処理するだけです。</p>
+    <div class="flow">
+      <div class="step"><div class="n">STEP 1</div><h3>取り込み</h3><p>CSV をドラッグ＆ドロップ。文字コードと列名を自動判別し、姓・名の結合、電話番号の先頭 0 の補完、重複の排除まで自動。</p></div>
+      <div class="step"><div class="n">STEP 2</div><h3>自動振り分け</h3><p>「役職に部長を含む → A」のようなルールを画面で編集。アンケート列も条件に使え、既存のランク列があればそのまま採用。</p></div>
+      <div class="step"><div class="n">STEP 3</div><h3>担当割当</h3><p>担当者を選んで 1 クリック。A ランクも人ごとに均等になるように配ります。一括の変更もチェックで。</p></div>
+      <div class="step"><div class="n">STEP 4</div><h3>今日やるリスト</h3><p>自分の担当分が優先度順に。電話 → ステータス → 次回コール → メモ →「記録して次へ」で次の人が開きます。</p></div>
+      <div class="step"><div class="n">STEP 5</div><h3>進捗を見る</h3><p>通電率・アポ率・残件・再コール期限切れを、セグメント別・担当者別・日別で。どこで詰まっているかが一目で分かります。</p></div>
+      <div class="step"><div class="n">STEP 6</div><h3>書き出し</h3><p>Excel 4 シート、CSV、Google スプレッドシートへ直接。クライアントへの報告はシート共有で完結します。</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="eyebrow">Capabilities</div>
+    <h2>備えている機能</h2>
+    <div class="grid">
+      <div class="feat"><h3>どんな CSV でも</h3><p>主催者の来場者リスト、バッジのスキャンアプリ出力、自社で管理している名刺リスト。1 行目が見出しなら読み込み、見出しの注釈や重複も整理します。</p></div>
+      <div class="feat"><h3>重複と過去接触</h3><p>メール、なければ会社名＋氏名（法人格や全角半角のゆれを吸収）で同一人物を判定。別の展示会で会った人は「過去接触あり」として前回の結果を表示。</p></div>
+      <div class="feat"><h3>ルールエディタ</h3><p>含む・一致・正規表現・数値の以上以下・空判定。優先度順に評価し、最初に一致したセグメントに。手で変えた分は再判定から保護されます。</p></div>
+      <div class="feat"><h3>次回コールと期限切れ</h3><p>「明日 9 時」「3 日後」「1 週間後」のワンタップ入力。期限を過ぎたものは赤く表示され、再コール漏れがなくなります。</p></div>
+      <div class="feat"><h3>ダッシュボード</h3><p>総件数・架電済・通電率・アポ・資料送付・残件・期限切れ。セグメント別／担当者別の消化率バーと、日別のアクション数。</p></div>
+      <div class="feat"><h3>書き出しと共有</h3><p>リード一覧・サマリー・セグメント×担当・フォロー履歴を Excel に。サービスアカウントを設定すれば Google スプレッドシートに直接書き込み。</p></div>
+      <div class="feat"><h3>権限とログイン</h3><p>メール＋パスワードの招待制。管理者と担当者の 2 権限で、担当者には取り込みやルールのタブは出ません。</p></div>
+      <div class="feat"><h3>セキュリティ</h3><p>パスワードはハッシュ化、Cookie は HttpOnly／Secure、CSRF 対策、ログイン試行制限、HTTPS、監査ログ。</p></div>
+      <div class="feat"><h3>バックアップ</h3><p>毎日自動で 14 世代を保持。管理者は画面からその場でダウンロードして手元にも保管できます。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="numbers">
+  <div class="container">
+    <div class="eyebrow">Results</div>
+    <h2>展示会の名刺に架けると、通常の新規開拓の 6〜11 倍決まる</h2>
+    <p class="lede">DigLead のフォロー運用での実測です。分母はコール数。展示会で一度会っている相手だから、同じ架電でも結果が変わります。</p>
+    <div class="chart">
+      <div>
+        <div class="bars" role="img" aria-label="対コールのアポ率の比較。通常の新規開拓 1.31%、展示会フォロー AI活用支援企業 8.2%、展示会フォロー Webシステム企業 14.3%">
+          <div class="lab">通常の新規開拓<small>アウトバウンド全案件の平均</small></div><div class="track"><i style="width:9%" title="1.31%"></i></div><div class="val">1.31<small>%</small></div>
+          <div class="lab">展示会フォロー<small>AI 活用支援の BtoB 企業・名刺 2,074 件</small></div><div class="track"><i class="hi" style="width:57%" title="8.2%"></i></div><div class="val">8.2<small>%（約 6 倍）</small></div>
+          <div class="lab">展示会フォロー<small>Web システム基盤の BtoB 企業・名刺 38 件</small></div><div class="track"><i class="hi" style="width:100%" title="14.3%"></i></div><div class="val">14.3<small>%（約 11 倍）</small></div>
+        </div>
+        <div class="chart-note">対コールのアポ率＝アポ件数 ÷ 総コール数。担当者本人に届いた場合のアポ率は 44〜60%（担当者接触比）。</div>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><b>54%</b><span>閉会 2 週間以内に着手した回の担当者接触率。2 か月を超えると 25% に落ちる</span></div>
+        <div class="kpi"><b>95%</b><span>アポのうち、3 回目までの架電で取れた割合</span></div>
+        <div class="kpi"><b>12.1</b><span>1 アポあたりのコール数（2,074 件の運用）</span></div>
+        <div class="kpi"><b>17 時台・火曜</b><span>最もつながり、アポ率が高い時間帯と曜日</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container two">
+    <div>
+      <div class="eyebrow">Triage</div>
+      <h2>ランクは「感覚」ではなく、2 軸で決める</h2>
+      <p>「A＝良さそう」では人によって基準がずれ、架電順が信用されなくなります。このツールでは <b>決裁関与度</b>（決裁者か、関与者か、権限なしか）と <b>温度</b>（具体的に検討中か、興味ありか、情報収集か）の 2 軸で S/A/B/C を決め、ランクごとに「次のアクションと期限」を定義します。</p>
+      <p>商材ごとの違いは、ランク体系を作り直すのではなく「商材に合う会社か」の条件を足して吸収。担当者が複数案件を掛け持ちしても迷いません。定義の型と見直し手順は利用マニュアルに収録しています。</p>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">横：温度 ／ 縦：決裁関与度</div>
+      <div class="matrix">
+        <div></div><div class="h">高</div><div class="h">中</div><div class="h">低</div>
+        <div class="r">高</div><div class="cell A">S/A</div><div class="cell A">A</div><div class="cell B">B</div>
+        <div class="r">中</div><div class="cell A">A</div><div class="cell B">B</div><div class="cell C">C</div>
+        <div class="r">低</div><div class="cell B">B</div><div class="cell C">C</div><div class="cell C">C</div>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);margin-top:10px">同業・競合・学生・連絡先不備は、この表に入る前に X（対象外）へ。</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="eyebrow">Operations &amp; security</div>
+    <h2>運用に必要なことは、最初から入っています</h2>
+    <div class="sec">
+      <div><b>招待制ログイン</b>管理者が招待リンクを発行して渡すだけ。メール配信サービスの契約は不要です。</div>
+      <div><b>権限分離</b>管理者＝取り込み・ルール・割当・設定。担当者＝フォロー・ダッシュボード・書き出し。</div>
+      <div><b>記録者の固定</b>フォロー記録の記録者はログイン本人。誰がいつ何をしたかが残ります。</div>
+      <div><b>停止即時反映</b>退職・異動はメンバーを停止するだけでログイン不可。担当リードは配り直せます。</div>
+      <div><b>HTTPS と保護ヘッダ</b>通信は常に暗号化。CSP、クリックジャッキング対策、HSTS。</div>
+      <div><b>日次バックアップ</b>自動で 14 世代。管理画面からダウンロードして手元にも保管。</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="eyebrow">Plans</div>
+    <h2>DigLead のフォロー運用で使っているツールです</h2>
+    <p class="lede">展示会フォロー特化サービス DigLead では、このツールでトリアージから架電・記録・報告までを回しています。ご自身のチームで運用したい場合も、フォローごとお任せいただく場合もご相談ください。</p>
+    <div class="tablewrap"><table class="price">
+      <tr><th>プラン</th><th>内容</th><th>価格（税別）</th></tr>
+      <tr><td>ライト</td><td>架電フォロー＋結果記録</td><td class="v">500 円 / 1 コール（最低 100 コール）</td></tr>
+      <tr><td>スタンダード</td><td>AI リサーチ＋1to1 個別フォロー一式（〜300 名刺）</td><td class="v">150,000 円〜</td></tr>
+      <tr><td>プレミアム</td><td>上位リード限定の体験便つき。複数小間・大型出展向け</td><td class="v">300,000 円〜 ＋ 商談化 1 件 10,000 円</td></tr>
+    </table></div>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:8px">会期前のお申込みで、閉会翌営業日から開始できます。</p>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="cta">
+      <h2>次の展示会から、閉会翌営業日に架電を始めませんか</h2>
+      <p>来場者 CSV を 1 つお送りいただければ、振り分けの初期ルールとランク定義をご提案します。</p>
+      <a class="btn primary" href="https://synapse-work.com/diglead">DigLead に相談する</a><a class="btn" href="https://diglead.onrender.com/">ツールにログイン</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="logo" style="font-size:16px">DigLead<span>by SynapseWork</span></div>
+    <div class="co">
+      <span>会社名</span><span>株式会社SynapseWork</span>
+      <span>代表者</span><span>代表取締役社長　大石 翔太</span>
+      <span>所在地</span><span>大阪府大阪市北区梅田1丁目2番2号 大阪駅前第2ビル12-12</span>
+      <span>事業内容</span><span>インサイドセールス特化の営業支援／展示会フォロー特化サービス「DigLead」の運営</span>
+      <span>Web</span><span><a href="https://synapse-work.com/">https://synapse-work.com/</a></span>
+    </div>
+    <p style="margin-top:14px">実績数値は自社運用の実測（2026 年）。クライアント名は業種・規模のみで表記しています。</p>
+  </div>
+</footer>
+</body>
+</html>
