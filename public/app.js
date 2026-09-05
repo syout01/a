@@ -1,4 +1,4 @@
-import { csvToObjects, decodeBytes, guessMapping, applyMapping } from '/csv.js';
+import { csvToObjects, decodeBytes, guessMapping, applyMapping, TARGET_FIELDS } from '/csv.js';
 
 // ---------- 共通 ----------
 const state = {
@@ -122,16 +122,13 @@ async function renderImport(view) {
     const { headers, records } = csvToObjects(text);
     if (!headers.length || !records.length) return toast('CSV に行がありません', true);
     const saved = e.mapping && Object.values(e.mapping).every((c) => c === '__combine_last_first__' || headers.includes(c)) ? e.mapping : null;
-    state.importData = { exhibitionId: e.id, fileName: file.name, encoding, headers, records, mapping: saved || guessMapping(headers), preview: null, result: null };
+    state.importData = { exhibitionId: e.id, fileName: file.name, encoding, headers, records, mapping: saved || guessMapping(headers, records), createMembers: true, preview: null, result: null };
     renderMapping();
   }
 
   function renderMapping() {
     const d = state.importData;
-    const fields = [
-      ['company', '会社名'], ['name', '氏名'], ['last_name', '姓（分かれている場合）'], ['first_name', '名（分かれている場合）'],
-      ['department', '部署'], ['title', '役職'], ['email', 'メール'], ['phone', '電話'], ['industry', '業種'], ['employees', '従業員数'], ['memo', 'メモ・アンケート'],
-    ];
+    const fields = TARGET_FIELDS.map((f) => [f.key, f.label]);
     const opt = (key) => {
       const cur = d.mapping[key] || '';
       let html = `<option value="">（取り込まない）</option>`;
@@ -147,10 +144,12 @@ async function renderImport(view) {
       <div class="grid3">
         ${fields.map(([k, label]) => `<label class="row"><span style="width:150px">${label}</span><select data-map="${k}" style="flex:1">${opt(k)}</select></label>`).join('')}
       </div>
-      <p class="muted small">対応付けしなかった列も「その他の項目」として保存され、ルール条件（extra.列名）や書き出しに使えます。</p>
+      <p class="muted small">対応付けしなかった列も「その他の項目」として保存され、フォロー画面の表示・ルール条件（extra.列名）・書き出しに使えます。
+        「既存ランク」を対応付けると、その値に合うセグメント（A/B/C…）があればルールより優先して固定します。「担当者名」はフォロー担当になり、
+        <label><input type="checkbox" id="createMembers" ${d.createMembers ? 'checked' : ''}> 未登録の名前は担当者として自動登録</label></p>
       <h3>プレビュー（先頭 8 行）</h3>
-      <div class="scroll"><table class="tbl"><thead><tr><th>会社名</th><th>氏名</th><th>部署</th><th>役職</th><th>メール</th><th>電話</th><th>業種</th><th>従業員数</th><th>メモ</th><th>その他</th></tr></thead>
-      <tbody>${mapped.map((l) => `<tr><td>${esc(l.company)}</td><td>${esc(l.name)}</td><td>${esc(l.department)}</td><td>${esc(l.title)}</td><td>${esc(l.email)}</td><td>${esc(l.phone)}</td><td>${esc(l.industry)}</td><td>${esc(l.employees)}</td><td>${esc(l.memo)}</td><td class="small muted">${esc(Object.entries(l.extra).map(([k, v]) => `${k}=${v}`).join(' / ').slice(0, 80))}</td></tr>`).join('')}</tbody></table></div>
+      <div class="scroll"><table class="tbl"><thead><tr><th>会社名</th><th>氏名</th><th>部署</th><th>役職</th><th>メール</th><th>電話</th><th>業種</th><th>従業員数</th><th>メモ</th><th>既存ランク</th><th>担当</th><th>対応メモ</th><th>その他</th></tr></thead>
+      <tbody>${mapped.map((l) => `<tr><td>${esc(l.company)}</td><td>${esc(l.name)}</td><td>${esc(l.department)}</td><td>${esc(l.title)}</td><td>${esc(l.email)}</td><td>${esc(l.phone)}</td><td>${esc(l.industry)}</td><td>${esc(l.employees)}</td><td>${esc(l.memo)}</td><td>${esc(l.segment_hint)}</td><td>${esc(l.assignee_name)}</td><td>${esc(l.note)}</td><td class="small muted">${esc(Object.entries(l.extra).map(([k, v]) => `${k}=${v}`).join(' / ').slice(0, 80))}</td></tr>`).join('')}</tbody></table></div>
       <div class="row mt">
         <button id="dryRun">判定プレビュー（書き込まない）</button>
         <button id="doImport" class="primary">この内容で取り込む</button>
@@ -159,20 +158,24 @@ async function renderImport(view) {
       <div id="importResult" class="mt"></div>`;
     $$('select[data-map]').forEach((s) => { s.onchange = () => { d.mapping[s.dataset.map] = s.value; if (s.dataset.map === 'name' && s.value && s.value !== '__combine_last_first__') { /* 氏名を直接選んだら姓名結合は解除 */ } renderMapping(); }; });
     $('#clearImport').onclick = () => { state.importData = null; $('#importArea').innerHTML = ''; };
+    $('#createMembers').onchange = (ev) => { d.createMembers = ev.target.checked; };
     const buildLeads = () => d.records.map((r) => applyMapping(r, d.mapping, d.headers));
     const showResult = (r) => {
       $('#importResult').innerHTML = `<div class="${r.dry_run ? 'notice' : 'card'}">
         <b>${r.dry_run ? '判定プレビュー' : '取り込み完了'}</b>：取り込み ${r.imported} 件／重複スキップ ${r.duplicates} 件／過去展示会で接触あり ${r.returning} 件／空行 ${r.skipped_empty} 件
         <div class="row mt">${Object.entries(r.bySegment).map(([c, n]) => `${segBadge(c)} ${n}件`).join(' ')}</div>
+        ${r.segment_from_csv ? `<div class="small mt">CSV の既存ランクを採用：${r.segment_from_csv} 件（手動固定扱い）</div>` : ''}
+        ${Object.keys(r.segment_hint_unmatched || {}).length ? `<div class="small mt">対応するセグメントがなくルール判定にしたランク：${Object.entries(r.segment_hint_unmatched).map(([k, v]) => `「${esc(k)}」${v}件`).join('、')}。<a href="#/settings">設定</a>でセグメントを追加して再取り込みすると採用されます。</div>` : ''}
+        ${r.assigned_from_csv ? `<div class="small mt">CSV の担当者名で割当：${r.assigned_from_csv} 件${r.members_created?.length ? `（新規登録：${esc([...new Set(r.members_created)].join('、'))}）` : ''}</div>` : ''}
         ${r.dry_run ? '' : '<div class="mt">次は <a href="#/assign">③ 担当割当</a> へ。</div>'}</div>`;
     };
     $('#dryRun').onclick = async () => {
-      try { showResult(await api(`/api/exhibitions/${e.id}/import`, { method: 'POST', body: { leads: buildLeads(), mapping: d.mapping, dry_run: true } })); } catch (err) { onErr(err); }
+      try { showResult(await api(`/api/exhibitions/${e.id}/import`, { method: 'POST', body: { leads: buildLeads(), mapping: d.mapping, dry_run: true, create_members: d.createMembers } })); } catch (err) { onErr(err); }
     };
     $('#doImport').onclick = async () => {
       if (!confirm(`${d.records.length} 行を「${e.name}」に取り込みます。よろしいですか？`)) return;
       try {
-        const r = await api(`/api/exhibitions/${e.id}/import`, { method: 'POST', body: { leads: buildLeads(), mapping: d.mapping } });
+        const r = await api(`/api/exhibitions/${e.id}/import`, { method: 'POST', body: { leads: buildLeads(), mapping: d.mapping, create_members: d.createMembers } });
         await loadBase(); showResult(r); toast(`${r.imported} 件を取り込みました`);
       } catch (err) { onErr(err); }
     };

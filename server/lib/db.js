@@ -24,6 +24,16 @@ export const DEFAULT_RULES = [
     ],
   },
   {
+    name: '導入権限あり／経営・部長クラス（アンケート）は即架電',
+    segment_code: 'A',
+    priority: 15,
+    match_mode: 'any',
+    conditions: [
+      { field: 'extra.あなたの製品導入権限は？', op: 'equals', value: '導入権限がある' },
+      { field: 'extra.あなたの役職レベルは？', op: 'in_list', value: '経営・役員クラス,本部長・部長クラス' },
+    ],
+  },
+  {
     name: '決裁者クラスは即架電',
     segment_code: 'A',
     priority: 20,
@@ -47,7 +57,9 @@ export const DEFAULT_RULES = [
     priority: 30,
     match_mode: 'any',
     conditions: [
-      { field: 'title', op: 'regex', value: '(課長|マネージャー|マネジャー|リーダー|主任|係長|担当)' },
+      { field: 'title', op: 'regex', value: '(課長|次長|マネージャー|マネジャー|リーダー|主任|係長|チーフ|担当)' },
+      { field: 'extra.あなたの役職レベルは？', op: 'in_list', value: '課長クラス,主任クラス' },
+      { field: 'extra.あなたの製品導入権限は？', op: 'contains', value: '関与している' },
     ],
   },
   {

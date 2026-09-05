@@ -52,11 +52,15 @@ export default function exhibitionRoutes(db) {
     const leads = Array.isArray(req.body?.leads) ? req.body.leads : [];
     if (!leads.length) return res.status(400).json({ error: '取り込む行がありません' });
     const rules = loadRules();
+    const segments = loadSegments();
+    const createMembers = req.body?.create_members !== false;
+    const memberByName = new Map(loadMembers().map((m) => [normName(m.name), m.id]));
+    const insMember = db.prepare('INSERT INTO members (name, sort_order) VALUES (?, (SELECT COALESCE(MAX(sort_order),0)+1 FROM members))');
     const findSame = db.prepare('SELECT id FROM leads WHERE exhibition_id = ? AND dedupe_key = ? LIMIT 1');
     const findPrev = db.prepare('SELECT id, exhibition_id FROM leads WHERE exhibition_id != ? AND dedupe_key = ? ORDER BY id DESC LIMIT 1');
-    const ins = db.prepare(`INSERT INTO leads (exhibition_id, company, name, department, title, email, phone, industry, employees, memo, extra_json, dedupe_key, returning_lead_id, segment_code, matched_rule_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    const result = { imported: 0, duplicates: 0, returning: 0, skipped_empty: 0, bySegment: {} };
+    const ins = db.prepare(`INSERT INTO leads (exhibition_id, company, name, department, title, email, phone, industry, employees, memo, extra_json, dedupe_key, returning_lead_id, segment_code, matched_rule_id, segment_locked, assignee_id, last_note)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+    const result = { imported: 0, duplicates: 0, returning: 0, skipped_empty: 0, bySegment: {}, segment_from_csv: 0, segment_hint_unmatched: {}, assigned_from_csv: 0, members_created: [] };
     const seenInBatch = new Set();
     db.exec('BEGIN');
     try {
@@ -68,11 +72,26 @@ export default function exhibitionRoutes(db) {
         if (key) seenInBatch.add(key);
         const prev = key ? findPrev.get(e.id, key) : null;
         if (prev) result.returning++;
-        const c = classify(lead, rules);
+        // 既存ランク列があればそれを優先（手動固定扱い）。合うセグメントがなければルール判定
+        let segCode = null, ruleId = null, locked = 0;
+        const hinted = matchSegmentHint(lead.segment_hint, segments);
+        if (hinted) { segCode = hinted; locked = 1; result.segment_from_csv++; }
+        else {
+          if (lead.segment_hint) result.segment_hint_unmatched[lead.segment_hint] = (result.segment_hint_unmatched[lead.segment_hint] || 0) + 1;
+          const c = classify(lead, rules); segCode = c.segment_code; ruleId = c.rule_id;
+        }
+        // 担当者名 → members（なければ作成）
+        let assigneeId = null;
+        if (lead.assignee_name) {
+          const k = normName(lead.assignee_name);
+          if (memberByName.has(k)) assigneeId = memberByName.get(k);
+          else if (createMembers) { assigneeId = Number(insMember.run(lead.assignee_name).lastInsertRowid); memberByName.set(k, assigneeId); result.members_created.push(lead.assignee_name); }
+          if (assigneeId) result.assigned_from_csv++;
+        }
         ins.run(e.id, lead.company, lead.name, lead.department, lead.title, lead.email, lead.phone, lead.industry, lead.employees, lead.memo,
-          JSON.stringify(lead.extra || {}), key, prev ? prev.id : null, c.segment_code, c.rule_id);
+          JSON.stringify(lead.extra || {}), key, prev ? prev.id : null, segCode, ruleId, locked, assigneeId, lead.note || null);
         result.imported++;
-        result.bySegment[c.segment_code] = (result.bySegment[c.segment_code] || 0) + 1;
+        result.bySegment[segCode] = (result.bySegment[segCode] || 0) + 1;
       }
       if (req.body.mapping) db.prepare('UPDATE exhibitions SET mapping_json = ? WHERE id = ?').run(JSON.stringify(req.body.mapping), e.id);
       // dry_run のときは集計だけ返して書き込まない（取り込み前プレビュー用）
@@ -187,8 +206,20 @@ function normalizeLeadInput(raw = {}) {
   return {
     company: s(raw.company), name: s(raw.name), department: s(raw.department), title: s(raw.title),
     email: s(raw.email), phone: s(raw.phone), industry: s(raw.industry), employees: s(raw.employees), memo: s(raw.memo),
+    segment_hint: s(raw.segment_hint), assignee_name: s(raw.assignee_name), note: s(raw.note),
     extra: raw.extra && typeof raw.extra === 'object' ? raw.extra : {},
   };
+}
+
+const normName = (v) => String(v ?? '').normalize('NFKC').replace(/[\s　]/g, '').toLowerCase();
+
+// CSV のランク値（"A" "Ｂ" "A：即架電" など）をセグメントコードに寄せる
+export function matchSegmentHint(hint, segments) {
+  const h = normName(hint);
+  if (!h) return null;
+  for (const s of segments) if (normName(s.code) === h) return s.code;
+  for (const s of segments) { const l = normName(s.label); if (l === h || l.startsWith(h + ':') || l.startsWith(h + '：') || h.startsWith(normName(s.code) + ':')) return s.code; }
+  return null;
 }
 
 function fileBase(e) {

@@ -36,7 +36,9 @@ export function normalizeText(v) {
 export function toNumber(v) {
   if (v == null) return null;
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  const s = String(v).normalize('NFKC').replace(/,/g, '');
+  // 「４．100-300人未満」「(2) 50名」のような選択肢の連番は数値ではないので外す
+  const raw = String(v).replace(/^\s*(?:[０-９]{1,2}\s*[．。、）)]|\d{1,2}\s*[、）)]|\d{1,2}\.\s+|[(（]\s*\d{1,2}\s*[)）])\s*/, '');
+  const s = raw.normalize('NFKC').replace(/,/g, '');
   const m = s.match(/-?\d+(?:\.\d+)?/);
   if (!m) return null;
   let n = parseFloat(m[0]);
