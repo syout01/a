@@ -5,6 +5,7 @@ import { classify, roundRobinAssign } from '../lib/segment.js';
 import { dedupeKey } from '../lib/dedupe.js';
 import { toXlsxBuffer, toCsv, toSheetValues, buildSummary } from '../lib/export.js';
 import { writeSheets } from '../lib/gsheets.js';
+import { requireAdmin, audit } from '../lib/auth.js';
 
 export default function exhibitionRoutes(db) {
   const r = Router();
@@ -25,14 +26,14 @@ export default function exhibitionRoutes(db) {
     res.json(rows.map((e) => ({ ...e, mapping: safeJson(e.mapping_json, null), mapping_json: undefined })));
   });
 
-  r.post('/', (req, res) => {
+  r.post('/', requireAdmin, (req, res) => {
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: '展示会名は必須です' });
     const info = db.prepare('INSERT INTO exhibitions (name, held_on, venue) VALUES (?,?,?)').run(name, req.body.held_on || null, req.body.venue || null);
     res.status(201).json(getEx(info.lastInsertRowid));
   });
 
-  r.put('/:id', (req, res) => {
+  r.put('/:id', requireAdmin, (req, res) => {
     const e = getEx(req.params.id);
     if (!e) return res.status(404).json({ error: 'not found' });
     const b = req.body || {};
@@ -40,13 +41,14 @@ export default function exhibitionRoutes(db) {
     res.json(getEx(e.id));
   });
 
-  r.delete('/:id', (req, res) => {
+  r.delete('/:id', requireAdmin, (req, res) => {
     db.prepare('DELETE FROM exhibitions WHERE id = ?').run(req.params.id);
+    audit(db, req, 'exhibition_delete', req.params.id);
     res.json({ ok: true });
   });
 
   // 取り込み。body: { mapping, leads: [{company,name,...,extra}] }
-  r.post('/:id/import', (req, res) => {
+  r.post('/:id/import', requireAdmin, (req, res) => {
     const e = getEx(req.params.id);
     if (!e) return res.status(404).json({ error: 'not found' });
     const leads = Array.isArray(req.body?.leads) ? req.body.leads : [];
@@ -97,6 +99,7 @@ export default function exhibitionRoutes(db) {
       // dry_run のときは集計だけ返して書き込まない（取り込み前プレビュー用）
       if (req.body.dry_run) { db.exec('ROLLBACK'); return res.json({ ...result, dry_run: true }); }
       db.exec('COMMIT');
+      audit(db, req, 'import', `${e.id}:${result.imported}`);
     } catch (err) {
       db.exec('ROLLBACK');
       throw err;
@@ -105,7 +108,7 @@ export default function exhibitionRoutes(db) {
   });
 
   // ルール再判定（手動で固定したものは overwrite_locked=true のときだけ上書き）
-  r.post('/:id/reclassify', (req, res) => {
+  r.post('/:id/reclassify', requireAdmin, (req, res) => {
     const e = getEx(req.params.id);
     if (!e) return res.status(404).json({ error: 'not found' });
     const rules = loadRules();
@@ -128,7 +131,7 @@ export default function exhibitionRoutes(db) {
   });
 
   // 担当割当。body: { member_ids, segment_codes?, mode: 'unassigned'|'all' }
-  r.post('/:id/assign', (req, res) => {
+  r.post('/:id/assign', requireAdmin, (req, res) => {
     const e = getEx(req.params.id);
     if (!e) return res.status(404).json({ error: 'not found' });
     const memberIds = (req.body?.member_ids || []).map(Number).filter(Boolean);
@@ -188,13 +191,14 @@ export default function exhibitionRoutes(db) {
     res.send(csv);
   });
 
-  r.post('/:id/export/gsheets', async (req, res) => {
+  r.post('/:id/export/gsheets', requireAdmin, async (req, res) => {
     const e = getEx(req.params.id);
     if (!e) return res.status(404).json({ error: 'not found' });
     const target = req.body?.spreadsheet;
     if (!target) return res.status(400).json({ error: 'スプレッドシートの URL か ID を入れてください' });
     const values = toSheetValues({ exhibition: e, leads: loadLeads(e.id), segments: loadSegments(), members: loadMembers(), activities: loadActivities(e.id) });
     const out = await writeSheets(target, values);
+    audit(db, req, 'export_gsheets', e.id);
     res.json(out);
   });
 

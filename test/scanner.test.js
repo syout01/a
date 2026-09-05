@@ -3,9 +3,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { csvToObjects, guessMapping, applyMapping, cleanHeader, normalizePhone } from '../public/csv.js';
-import { openDb } from '../server/lib/db.js';
-import { createApp } from '../server/index.js';
 import { matchSegmentHint } from '../server/routes/exhibitions.js';
+import { startApp, setupAdmin } from './helpers.js';
 
 const text = fs.readFileSync(new URL('../samples/scanner_app_sample.csv', import.meta.url), 'utf8');
 
@@ -58,17 +57,9 @@ test('ランク値とセグメントの突き合わせ', () => {
   assert.equal(matchSegmentHint('', segs), null);
 });
 
-let server, base;
-before(async () => {
-  server = createApp(openDb(':memory:')).listen(0);
-  await new Promise((res) => server.once('listening', res));
-  base = `http://localhost:${server.address().port}`;
-});
-after(() => server.close());
-const j = async (url, body, method = body ? 'POST' : 'GET') => {
-  const r = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  return { status: r.status, data: await r.json() };
-};
+let app, j;
+before(async () => { app = await startApp(); j = app.client; await setupAdmin(j); });
+after(() => app.close());
 
 test('取り込み：既存ランクを優先、担当者を自動登録、S はルール判定に回る', async () => {
   const { data: ex } = await j('/api/exhibitions', { name: 'スキャンアプリ' });

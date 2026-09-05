@@ -1,22 +1,17 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { openDb } from '../server/lib/db.js';
-import { createApp } from '../server/index.js';
 import { csvToObjects, guessMapping, applyMapping } from '../public/csv.js';
+import { startApp, setupAdmin, addMembers } from './helpers.js';
 
-let server, base;
-const j = async (url, body, method = body ? 'POST' : 'GET') => {
-  const r = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  return { status: r.status, data: await r.json() };
-};
-
+let app, j, base;
 before(async () => {
-  server = createApp(openDb(':memory:')).listen(0);
-  await new Promise((res) => server.once('listening', res));
-  base = `http://localhost:${server.address().port}`;
+  app = await startApp();
+  j = app.client; base = app.base;
+  await setupAdmin(j);
+  await addMembers(j);
 });
-after(() => server.close());
+after(() => app.close());
 
 test('取り込み→重複→判定→割当→フォロー→サマリー→書き出し', async () => {
   const { data: ex } = await j('/api/exhibitions', { name: 'テスト展', held_on: '2026-09-01' });
@@ -47,7 +42,7 @@ test('取り込み→重複→判定→割当→フォロー→サマリー→�
   assert.equal(ret.data.returning, 3);
 
   // 割当（除外セグメントは配られない）
-  const members = (await j('/api/members')).data;
+  const members = (await j('/api/members')).data.filter((m) => m.role !== 'admin');
   const asg = await j(`/api/exhibitions/${ex.id}/assign`, { member_ids: members.map((m) => m.id), segment_codes: ['A', 'B', 'C'] });
   assert.equal(asg.data.assigned, 17);
   const un = await j(`/api/leads?exhibition_id=${ex.id}&assignee_id=0`);
@@ -57,10 +52,11 @@ test('取り込み→重複→判定→割当→フォロー→サマリー→�
   const today = await j(`/api/leads?exhibition_id=${ex.id}&assignee_id=${members[0].id}&due=today`);
   assert.ok(today.data.total > 0);
   const lead = today.data.items[0];
-  const act = await j(`/api/leads/${lead.id}/activities`, { status: 'calling', note: '不在', next_call_at: '2099-01-01 10:00:00', member_id: members[0].id });
+  const act = await j(`/api/leads/${lead.id}/activities`, { status: 'calling', note: '不在', next_call_at: '2099-01-01 10:00:00', member_id: 999 });
   assert.equal(act.status, 201);
   assert.equal(act.data.status, 'calling');
   assert.equal(act.data.activities.length, 1);
+  assert.equal(act.data.activities[0].member_name, '管理者', '記録者はログインユーザーに固定される');
   const today2 = await j(`/api/leads?exhibition_id=${ex.id}&assignee_id=${members[0].id}&due=today`);
   assert.equal(today2.data.total, today.data.total - 1, '次回コールが先の日付なら今日のリストから外れる');
 
@@ -84,10 +80,10 @@ test('取り込み→重複→判定→割当→フォロー→サマリー→�
   const sum = await j(`/api/exhibitions/${ex.id}/summary`);
   assert.equal(sum.data.total.total, 19);
   assert.equal(sum.data.total.touched, 1);
-  const x = await fetch(`${base}/api/exhibitions/${ex.id}/export.xlsx`);
+  const x = await j.raw(`/api/exhibitions/${ex.id}/export.xlsx`);
   assert.equal(x.status, 200);
   assert.ok((await x.arrayBuffer()).byteLength > 5000);
-  const c = await fetch(`${base}/api/exhibitions/${ex.id}/export.csv`);
+  const c = await j.raw(`/api/exhibitions/${ex.id}/export.csv`);
   const csvBytes = new Uint8Array(await c.arrayBuffer());
   assert.deepEqual([...csvBytes.slice(0, 3)], [0xef, 0xbb, 0xbf], 'Excel 用に BOM 付き');
   const csv = new TextDecoder().decode(csvBytes);

@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const DEFAULT_SEGMENTS = [
-  { code: 'A', label: 'A：即架電', action: '当日〜翌営業日に架電', color: '#d9534f', sort_order: 1, is_excluded: 0 },
-  { code: 'B', label: 'B：メール後架電', action: 'お礼メール送付後に架電', color: '#f0ad4e', sort_order: 2, is_excluded: 0 },
-  { code: 'C', label: 'C：ナーチャリング', action: 'メルマガ・資料送付で温める', color: '#5bc0de', sort_order: 3, is_excluded: 0 },
+  { code: 'A', label: 'A：即架電', action: '翌営業日までに架電。アポ打診まで一気に', color: '#d9534f', sort_order: 1, is_excluded: 0 },
+  { code: 'B', label: 'B：架電（1週間以内）', action: 'A が一巡したら架電。1 週間以内に初回接触', color: '#f0ad4e', sort_order: 2, is_excluded: 0 },
+  { code: 'C', label: 'C：架電（余力があれば）', action: '残件がなくなったら架電。2 週間で一巡', color: '#5bc0de', sort_order: 3, is_excluded: 0 },
   { code: 'X', label: 'X：除外', action: 'フォロー対象外（同業・学生など）', color: '#999999', sort_order: 9, is_excluded: 1 },
   { code: 'U', label: '未分類', action: 'ルールに当てはまらず。手動で振り分け', color: '#777777', sort_order: 99, is_excluded: 0 },
 ];
@@ -52,7 +52,7 @@ export const DEFAULT_RULES = [
     ],
   },
   {
-    name: '課長・リーダー・担当はメール後架電',
+    name: '課長・リーダー・担当は B',
     segment_code: 'B',
     priority: 30,
     match_mode: 'any',
@@ -63,7 +63,7 @@ export const DEFAULT_RULES = [
     ],
   },
   {
-    name: 'その他はナーチャリング',
+    name: 'その他は C',
     segment_code: 'C',
     priority: 90,
     match_mode: 'all',
@@ -71,7 +71,6 @@ export const DEFAULT_RULES = [
   },
 ];
 
-export const DEFAULT_MEMBERS = ['担当A', '担当B'];
 
 export const LEAD_STATUSES = [
   { code: 'new', label: '未着手', touched: 0, connected: 0, closed: 0 },
@@ -97,7 +96,40 @@ CREATE TABLE IF NOT EXISTS members (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
   active INTEGER NOT NULL DEFAULT 1,
-  sort_order INTEGER NOT NULL DEFAULT 0
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  email TEXT UNIQUE,
+  password_hash TEXT,
+  role TEXT NOT NULL DEFAULT 'member',
+  last_login_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  last_seen_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  expires_at TEXT NOT NULL,
+  ip TEXT,
+  user_agent TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_member ON sessions(member_id);
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_id INTEGER,
+  action TEXT NOT NULL,
+  target TEXT,
+  ip TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE TABLE IF NOT EXISTS segments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,8 +189,21 @@ export function openDb(dbPath = process.env.DB_PATH || 'data/app.db') {
   const db = new DatabaseSync(dbPath);
   db.exec(SCHEMA);
   try { db.exec('PRAGMA journal_mode = WAL'); } catch { /* メモリDBでは不要 */ }
+  migrate(db);
   seedDefaults(db);
   return db;
+}
+
+// 旧バージョンの DB に列を足す（存在すれば何もしない）
+function migrate(db) {
+  const cols = new Set(db.prepare('PRAGMA table_info(members)').all().map((c) => c.name));
+  const add = (name, ddl) => { if (!cols.has(name)) db.exec(`ALTER TABLE members ADD COLUMN ${name} ${ddl}`); };
+  add('email', 'TEXT');
+  add('password_hash', 'TEXT');
+  add('role', "TEXT NOT NULL DEFAULT 'member'");
+  add('last_login_at', 'TEXT');
+  add('created_at', 'TEXT');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_members_email ON members(email)');
 }
 
 function seedDefaults(db) {
@@ -171,11 +216,6 @@ function seedDefaults(db) {
   if (ruleCount === 0) {
     const ins = db.prepare('INSERT INTO segment_rules (name,segment_code,priority,match_mode,conditions_json,enabled) VALUES (?,?,?,?,?,1)');
     for (const r of DEFAULT_RULES) ins.run(r.name, r.segment_code, r.priority, r.match_mode, JSON.stringify(r.conditions));
-  }
-  const memberCount = db.prepare('SELECT COUNT(*) AS n FROM members').get().n;
-  if (memberCount === 0) {
-    const ins = db.prepare('INSERT INTO members (name, sort_order) VALUES (?,?)');
-    DEFAULT_MEMBERS.forEach((m, i) => ins.run(m, i));
   }
 }
 

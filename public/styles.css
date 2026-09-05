@@ -75,3 +75,10 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
 .notice { background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 8px; color: #92400e; }
 .pre { background: #f3f4f6; padding: 8px; border-radius: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; }
+
+.me { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.me .role { background: #374151; color: #fff; padding: 1px 8px; border-radius: 999px; font-size: 11px; }
+.me button { background: transparent; color: #fff; border-color: #4b5563; }
+.me button:hover { background: #1f2937; }
+.linkbox { display: flex; gap: 6px; margin-top: 6px; }
+.linkbox input { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }

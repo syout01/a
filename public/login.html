@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ログイン | 展示会リード フォロー管理</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .auth-card { width: 100%; max-width: 400px; }
+  .auth-card h1 { font-size: 18px; margin: 0 0 4px; }
+  .auth-card label { display: block; font-size: 13px; color: var(--muted); margin-top: 12px; }
+  .auth-card input { width: 100%; margin-top: 4px; padding: 9px 10px; }
+  .auth-card button.primary { width: 100%; margin-top: 18px; padding: 10px; }
+  .err { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 18px; }
+</style>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="card auth-card">
+    <div class="brand" style="color:var(--text);margin-bottom:12px">展示会リード フォロー管理</div>
+    <form id="form" autocomplete="on">
+      <h1 id="title">ログイン</h1>
+      <p id="desc" class="muted small" style="margin:0"></p>
+      <div id="fields"></div>
+      <div id="err" class="err" role="alert"></div>
+      <button class="primary" id="submit">ログイン</button>
+    </form>
+  </div>
+</div>
+<script src="/login.js"></script>
+</body>
+</html>

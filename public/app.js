@@ -4,7 +4,7 @@ import { csvToObjects, decodeBytes, guessMapping, applyMapping, TARGET_FIELDS } 
 const state = {
   config: null, exhibitions: [], members: [], segments: [], rules: [],
   exhibitionId: +localStorage.getItem('exhibitionId') || null,
-  meId: +localStorage.getItem('meId') || null,
+  me: null, meId: null,
   importData: null,
   follow: { mode: 'today', segment: '', status: '', q: '', assignee: null, selectedId: null, items: [] },
   assign: { segment: '', assignee: '', q: '', selected: new Set(), items: [], total: 0 },
@@ -16,11 +16,13 @@ const pct = (v) => (v == null ? '-' : `${(v * 100).toFixed(1)}%`);
 const fmtDt = (s) => (s ? String(s).slice(0, 16) : '');
 
 async function api(url, opts = {}) {
-  const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const res = await fetch(url, { headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { location.replace('/login.html'); throw new Error('ログインが必要です'); }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
+const isAdmin = () => state.me?.role === 'admin';
 let toastTimer;
 function toast(msg, isError = false) {
   const el = $('#toast');
@@ -36,12 +38,11 @@ const statusLabel = (code) => state.config?.statuses.find((s) => s.code === code
 const activeMembers = () => state.members.filter((m) => m.active);
 
 async function loadBase() {
-  const [config, exhibitions, members, segments, rules] = await Promise.all([
-    api('/api/config'), api('/api/exhibitions'), api('/api/members'), api('/api/segments'), api('/api/rules'),
+  const [{ user }, config, exhibitions, members, segments, rules] = await Promise.all([
+    api('/api/auth/me'), api('/api/config'), api('/api/exhibitions'), api('/api/members'), api('/api/segments'), api('/api/rules'),
   ]);
-  Object.assign(state, { config, exhibitions, members, segments, rules });
+  Object.assign(state, { me: user, meId: user.id, config, exhibitions, members, segments, rules });
   if (!ex() && exhibitions.length) state.exhibitionId = exhibitions[0].id;
-  if (state.meId && !members.find((m) => m.id === state.meId)) state.meId = null;
   renderHeader();
 }
 
@@ -49,16 +50,20 @@ function renderHeader() {
   const exSel = $('#exhibitionSelect');
   exSel.innerHTML = state.exhibitions.map((e) => `<option value="${e.id}" ${e.id === state.exhibitionId ? 'selected' : ''}>${esc(e.name)}${e.held_on ? `（${esc(e.held_on)}）` : ''} / ${e.lead_count}件</option>`).join('') || '<option value="">（展示会を作成してください）</option>';
   exSel.onchange = () => { state.exhibitionId = +exSel.value || null; localStorage.setItem('exhibitionId', state.exhibitionId || ''); state.follow.selectedId = null; state.assign.selected.clear(); route(); };
-  const me = $('#meSelect');
-  me.innerHTML = '<option value="">（未選択）</option>' + activeMembers().map((m) => `<option value="${m.id}" ${m.id === state.meId ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-  me.onchange = () => { state.meId = +me.value || null; localStorage.setItem('meId', state.meId || ''); state.follow.assignee = state.meId; route(); };
+  $('#meBox').innerHTML = `<span>${esc(state.me.name)}</span><span class="role">${state.me.role === 'admin' ? '管理者' : '担当者'}</span><button class="small" id="logout">ログアウト</button>`;
+  $('#logout').onclick = async () => { await api('/api/auth/logout', { method: 'POST' }).catch(() => {}); location.replace('/login.html'); };
+  // 担当者には管理者専用タブを出さない
+  const adminTabs = ['#/import', '#/rules', '#/assign'];
+  $$('#tabs a').forEach((a) => { a.hidden = !isAdmin() && adminTabs.includes(a.getAttribute('href')); });
 }
 
 // ---------- ルーター ----------
 const routes = { import: renderImport, rules: renderRules, assign: renderAssign, follow: renderFollow, dashboard: renderDashboard, export: renderExport, settings: renderSettings };
+const ADMIN_ROUTES = new Set(['import', 'rules', 'assign']);
 function route() {
-  const key = (location.hash.replace(/^#\//, '') || 'import').split('?')[0];
-  const fn = routes[key] || renderImport;
+  let key = (location.hash.replace(/^#\//, '') || (isAdmin() ? 'import' : 'follow')).split('?')[0];
+  if (!isAdmin() && ADMIN_ROUTES.has(key)) key = 'follow';
+  const fn = routes[key] || renderFollow;
   $$('#tabs a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#/${key}`));
   const view = $('#view');
   view.innerHTML = '<p class="muted">読み込み中…</p>';
@@ -434,7 +439,7 @@ async function renderFollow(view) {
       <div class="row mt"><label class="small">次回コール <input type="datetime-local" id="dNext" value="${toLocalInput(l.next_call_at)}"></label>
         <button class="small" data-q="1">明日 9時</button><button class="small" data-q="3">3日後</button><button class="small" data-q="7">1週間後</button><button class="small" data-q="clear">なし</button></div>
       <textarea id="dNote" class="mt" placeholder="ヒアリング内容・次回アクション（例：担当不在、9/10 午後に再コール）"></textarea>
-      <div class="row mt"><button id="dSave" class="primary">記録して次へ</button><span class="muted small">記録者：${esc(members.find((m) => m.id === state.meId)?.name || '（自分を未選択）')}</span></div>
+      <div class="row mt"><button id="dSave" class="primary">記録して次へ</button><span class="muted small">記録者：${esc(state.me.name)}</span></div>
       <h3>履歴（${l.activities.length}）</h3>
       <ul class="history">${l.activities.map((a) => `<li><span class="muted small">${esc(fmtDt(a.created_at))} ${esc(a.member_name || '')}</span> <span class="chip">${esc(statusLabel(a.status))}</span> ${a.next_call_at ? `<span class="chip">次回 ${esc(fmtDt(a.next_call_at))}</span>` : ''}<div>${esc(a.note || '')}</div></li>`).join('') || '<li class="muted">まだ記録がありません</li>'}</ul>`;
     let status = l.status;
@@ -444,7 +449,7 @@ async function renderFollow(view) {
     $('#dAss').onchange = async (ev) => { try { await api(`/api/leads/${l.id}`, { method: 'PATCH', body: { assignee_id: +ev.target.value } }); toast('担当を変更しました'); load(); } catch (err) { onErr(err); } };
     $('#dSave').onclick = async () => {
       try {
-        await api(`/api/leads/${l.id}/activities`, { method: 'POST', body: { status, note: $('#dNote').value, next_call_at: fromLocalInput($('#dNext').value), member_id: state.meId } });
+        await api(`/api/leads/${l.id}/activities`, { method: 'POST', body: { status, note: $('#dNote').value, next_call_at: fromLocalInput($('#dNext').value) } });
         toast('記録しました');
         const idx = f.items.findIndex((x) => x.id === l.id);
         await load();
@@ -529,25 +534,46 @@ async function renderSettings(view) {
   view.innerHTML = `
     <div class="grid2">
       <div class="card">
-        <h2>担当者</h2>
-        <form id="memForm" class="row"><input type="text" name="name" placeholder="氏名" required><button class="primary">追加</button></form>
-        <table class="tbl mt"><tbody>${state.members.map((m) => `<tr><td>${esc(m.name)}</td><td>${m.active ? '<span class="chip ok">稼働中</span>' : '<span class="chip">停止</span>'}</td><td class="num"><button class="small" data-toggle="${m.id}" data-active="${m.active}">${m.active ? '停止する' : '再開する'}</button> <button class="small danger" data-delmem="${m.id}">削除</button></td></tr>`).join('')}</tbody></table>
+        <h2>メンバー</h2>
+        <p class="muted small">メールアドレスを入れたメンバーはログインできます（招待リンクを発行して渡してください）。入れなければ「担当者としてだけ」存在します。</p>
+        ${isAdmin() ? `<form id="memForm" class="row"><input type="text" name="name" placeholder="氏名" required><input type="email" name="email" placeholder="メール（任意）"><select name="role"><option value="member">担当者</option><option value="admin">管理者</option></select><button class="primary">追加</button></form>` : ''}
+        <div class="scroll"><table class="tbl mt"><thead><tr><th>名前</th><th>メール</th><th>権限</th><th>状態</th><th></th></tr></thead><tbody>${state.members.map((m) => `<tr data-mid="${m.id}">
+          <td>${esc(m.name)}${m.id === state.me.id ? ' <span class="chip">自分</span>' : ''}</td>
+          <td>${isAdmin() ? `<input type="email" value="${esc(m.email || '')}" data-f="email" placeholder="未設定" style="width:210px">` : esc(m.email || '')}</td>
+          <td>${isAdmin() && m.id !== state.me.id ? `<select data-f="role"><option value="member" ${m.role !== 'admin' ? 'selected' : ''}>担当者</option><option value="admin" ${m.role === 'admin' ? 'selected' : ''}>管理者</option></select>` : (m.role === 'admin' ? '管理者' : '担当者')}</td>
+          <td>${m.active ? '<span class="chip ok">稼働中</span>' : '<span class="chip">停止</span>'} ${m.has_login ? '<span class="chip">ログイン可</span>' : ''}${m.last_login_at ? `<div class="small muted">最終 ${esc(fmtDt(m.last_login_at))}</div>` : ''}</td>
+          <td class="num" style="white-space:nowrap">${isAdmin() ? `<button class="small" data-savemem="${m.id}">保存</button> <button class="small" data-invite="${m.id}" ${m.email ? '' : 'disabled title="メールを設定して保存してから"'}>${m.has_login ? '再設定リンク' : '招待リンク'}</button> ${m.id !== state.me.id ? `<button class="small" data-toggle="${m.id}" data-active="${m.active}">${m.active ? '停止' : '再開'}</button> <button class="small danger" data-delmem="${m.id}">削除</button>` : ''}` : ''}</td>
+        </tr><tr class="linkrow" data-linkfor="${m.id}" hidden><td colspan="5"></td></tr>`).join('')}</tbody></table></div>
       </div>
       <div class="card">
+        <h2>自分のパスワード</h2>
+        <form id="pwForm" class="row"><input type="password" name="current" placeholder="現在のパスワード" autocomplete="current-password" required><input type="password" name="password" placeholder="新しいパスワード（10文字以上・英数字）" autocomplete="new-password" required><button class="primary">変更</button></form>
+      </div>
+      ${isAdmin() ? `<div class="card">
+        <h2>バックアップ</h2>
+        <p class="muted small">毎日自動でサーバー内に 14 世代保存しています。手元にも定期的にダウンロードして保管してください。</p>
+        <div class="row"><a href="/api/backups/download"><button class="primary">今すぐバックアップをダウンロード</button></a><span id="bkList" class="small muted"></span></div>
+      </div>` : ''}
+      ${isAdmin() ? `<div class="card">
         <h2>セグメント</h2>
         <form id="segForm" class="row"><input type="text" name="code" placeholder="コード（例 D）" style="width:100px" required><input type="text" name="label" placeholder="表示名" required><input type="text" name="action" placeholder="やること"><input type="color" name="color" value="#5b8def"><label class="small"><input type="checkbox" name="is_excluded"> 割当対象外</label><button class="primary">追加</button></form>
         <table class="tbl mt"><thead><tr><th>順</th><th>表示</th><th>やること</th><th></th></tr></thead><tbody>${state.segments.map((s) => `<tr data-seg="${s.id}"><td><input type="number" value="${s.sort_order}" data-f="sort_order" style="width:60px"></td><td><input type="color" value="${esc(s.color || '#777777')}" data-f="color"> <input type="text" value="${esc(s.label)}" data-f="label"></td><td><input type="text" value="${esc(s.action || '')}" data-f="action"> <label class="small"><input type="checkbox" data-f="is_excluded" ${s.is_excluded ? 'checked' : ''}>対象外</label></td><td class="num"><button class="small" data-savseg="${s.id}">保存</button> ${s.code !== 'U' ? `<button class="small danger" data-delseg="${s.id}">削除</button>` : ''}</td></tr>`).join('')}</tbody></table>
-      </div>
+      </div>` : ''}
     </div>
-    ${e ? `<div class="card"><h2>展示会の編集</h2>
+    ${e && isAdmin() ? `<div class="card"><h2>展示会の編集</h2>
       <form id="exEdit" class="row"><input type="text" name="name" value="${esc(e.name)}" required style="min-width:260px"><input type="date" name="held_on" value="${esc(e.held_on || '')}"><input type="text" name="venue" value="${esc(e.venue || '')}" placeholder="会場"><button class="primary">保存</button><button type="button" id="exDel" class="danger">この展示会を削除（リードも消えます）</button></form></div>` : ''}`;
-  $('#memForm').onsubmit = async (ev) => { ev.preventDefault(); try { await api('/api/members', { method: 'POST', body: Object.fromEntries(new FormData(ev.target)) }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } };
+  const memForm = $('#memForm');
+  if (memForm) memForm.onsubmit = async (ev) => { ev.preventDefault(); try { await api('/api/members', { method: 'POST', body: Object.fromEntries(new FormData(ev.target)) }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } };
+  $$('[data-savemem]').forEach((b) => { b.onclick = async () => { const tr = b.closest('tr'); const body = { email: $('[data-f=email]', tr).value.trim() }; const role = $('[data-f=role]', tr); if (role) body.role = role.value; try { await api(`/api/members/${b.dataset.savemem}`, { method: 'PUT', body }); await loadBase(); toast('保存しました'); renderSettings(view); } catch (err) { onErr(err); } }; });
+  $$('[data-invite]').forEach((b) => { b.onclick = async () => { try { const r = await api(`/api/members/${b.dataset.invite}/invite`, { method: 'POST' }); const row = $(`tr[data-linkfor="${b.dataset.invite}"]`); row.hidden = false; row.firstElementChild.innerHTML = `<div class="notice small">${r.kind === 'invite' ? '招待' : 'パスワード再設定'}リンク（${r.expires_hours >= 48 ? r.expires_hours / 24 + ' 日間' : r.expires_hours + ' 時間'}有効・1 回限り）。本人に Slack などで渡してください。<div class="linkbox"><input type="text" readonly value="${esc(r.url)}"><button class="small" data-copy>コピー</button></div></div>`; const inp = $('input', row); $('[data-copy]', row).onclick = () => { inp.select(); navigator.clipboard?.writeText(inp.value); toast('コピーしました'); }; inp.select(); } catch (err) { onErr(err); } }; });
   $$('[data-toggle]').forEach((b) => { b.onclick = async () => { await api(`/api/members/${b.dataset.toggle}`, { method: 'PUT', body: { active: b.dataset.active !== '1' } }).catch(onErr); await loadBase(); renderSettings(view); }; });
-  $$('[data-delmem]').forEach((b) => { b.onclick = async () => { if (!confirm('担当者を削除しますか？（割当は未割当に戻ります）')) return; await api(`/api/members/${b.dataset.delmem}`, { method: 'DELETE' }).catch(onErr); await loadBase(); renderSettings(view); }; });
-  $('#segForm').onsubmit = async (ev) => { ev.preventDefault(); const fd = new FormData(ev.target); const body = Object.fromEntries(fd); body.is_excluded = fd.get('is_excluded') ? 1 : 0; try { await api('/api/segments', { method: 'POST', body }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } };
+  $$('[data-delmem]').forEach((b) => { b.onclick = async () => { if (!confirm('メンバーを削除しますか？（割当は未割当に戻ります。履歴は残ります）')) return; await api(`/api/members/${b.dataset.delmem}`, { method: 'DELETE' }).catch(onErr); await loadBase(); renderSettings(view); }; });
+  $('#pwForm').onsubmit = async (ev) => { ev.preventDefault(); try { await api('/api/auth/password', { method: 'POST', body: Object.fromEntries(new FormData(ev.target)) }); ev.target.reset(); toast('パスワードを変更しました'); } catch (err) { onErr(err); } };
+  if (isAdmin()) api('/api/backups').then((r) => { $('#bkList').textContent = r.files.length ? `サーバー内の最新：${r.files[0].file}（${r.files.length} 世代）` : 'サーバー内のバックアップはまだありません'; }).catch(() => {});
+  if ($('#segForm')) $('#segForm').onsubmit = async (ev) => { ev.preventDefault(); const fd = new FormData(ev.target); const body = Object.fromEntries(fd); body.is_excluded = fd.get('is_excluded') ? 1 : 0; try { await api('/api/segments', { method: 'POST', body }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } };
   $$('[data-savseg]').forEach((b) => { b.onclick = async () => { const tr = b.closest('tr'); const body = { sort_order: +$('[data-f=sort_order]', tr).value, color: $('[data-f=color]', tr).value, label: $('[data-f=label]', tr).value, action: $('[data-f=action]', tr).value, is_excluded: $('[data-f=is_excluded]', tr).checked ? 1 : 0 }; try { await api(`/api/segments/${b.dataset.savseg}`, { method: 'PUT', body }); await loadBase(); toast('保存しました'); renderSettings(view); } catch (err) { onErr(err); } }; });
   $$('[data-delseg]').forEach((b) => { b.onclick = async () => { if (!confirm('セグメントを削除しますか？（該当リードは未分類に、関連ルールも削除）')) return; try { await api(`/api/segments/${b.dataset.delseg}`, { method: 'DELETE' }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } }; });
-  if (e) {
+  if (e && isAdmin()) {
     $('#exEdit').onsubmit = async (ev) => { ev.preventDefault(); try { await api(`/api/exhibitions/${e.id}`, { method: 'PUT', body: Object.fromEntries(new FormData(ev.target)) }); await loadBase(); toast('保存しました'); renderSettings(view); } catch (err) { onErr(err); } };
     $('#exDel').onclick = async () => { if (!confirm(`「${e.name}」とそのリードをすべて削除します。元に戻せません。よろしいですか？`)) return; try { await api(`/api/exhibitions/${e.id}`, { method: 'DELETE' }); state.exhibitionId = null; await loadBase(); location.hash = '#/import'; } catch (err) { onErr(err); } };
   }

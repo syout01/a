@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { hydrateLead, LEAD_STATUSES } from '../lib/db.js';
 import { dedupeKey } from '../lib/dedupe.js';
 import { nowLocal } from './exhibitions.js';
+import { requireAdmin, audit } from '../lib/auth.js';
 
 const STATUS_CODES = new Set(LEAD_STATUSES.map((s) => s.code));
 const EDITABLE = ['company', 'name', 'department', 'title', 'email', 'phone', 'industry', 'employees', 'memo'];
@@ -95,7 +96,7 @@ export default function leadRoutes(db) {
   });
 
   // 一括更新 { ids, assignee_id?, segment_code?, status? }
-  r.post('/bulk', (req, res) => {
+  r.post('/bulk', requireAdmin, (req, res) => {
     const ids = (req.body?.ids || []).map(Number).filter(Boolean);
     if (!ids.length) return res.status(400).json({ error: 'ids が空です' });
     const b = req.body;
@@ -120,7 +121,8 @@ export default function leadRoutes(db) {
     const status = b.status && STATUS_CODES.has(b.status) ? b.status : cur.status;
     const note = b.note ? String(b.note).trim() : '';
     const next = b.next_call_at || null;
-    const member = b.member_id ? db.prepare('SELECT * FROM members WHERE id = ?').get(+b.member_id) : null;
+    // 記録者はログインしている本人に固定（クライアントからの member_id は使わない）
+    const member = req.user;
     db.exec('BEGIN');
     try {
       db.prepare('INSERT INTO activities (lead_id, member_id, member_name, status, note, next_call_at) VALUES (?,?,?,?,?,?)')
@@ -135,8 +137,9 @@ export default function leadRoutes(db) {
     res.status(201).json(lead);
   });
 
-  r.delete('/:id', (req, res) => {
+  r.delete('/:id', requireAdmin, (req, res) => {
     db.prepare('DELETE FROM leads WHERE id = ?').run(req.params.id);
+    audit(db, req, 'lead_delete', req.params.id);
     res.json({ ok: true });
   });
 

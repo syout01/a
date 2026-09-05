@@ -6,15 +6,38 @@
 - 画面: ビルド不要の HTML / JavaScript（サーバーが同梱配信）
 - 書き出し: Excel (.xlsx) / CSV (Excel 用 BOM 付き UTF-8) / Google スプレッドシート（任意設定）
 
-## 使い方
+## 使い方（ローカルで試す）
 
 ```bash
 npm install
-npm run seed      # サンプル展示会 + 20 行の来場者CSV を投入（任意）
+npm run seed      # サンプル展示会 + 20 行の来場者CSV + デモ管理者を投入（任意）
 npm start         # http://localhost:3000
 ```
 
-社内 LAN の 1 台で `npm start` しておき、各担当者はブラウザで開いてヘッダーの「自分」で名前を選ぶだけです（ログインはありません）。
+`npm run seed` を実行した場合は `admin@example.com` / `demo-pass-1234` でログインできます（ローカル専用。本番では seed を使わないでください）。
+seed を使わない場合は、最初にアクセスした人が「最初の管理者を作成」画面で自分のアカウントを作ります。
+
+クラウドに載せて全員で使う手順は [docs/deploy-render.md](docs/deploy-render.md)、操作説明は [docs/manual.md](docs/manual.md) を見てください。
+
+## ログインと権限
+
+- ログイン ID はメールアドレス。招待制で、管理者が「設定 → メンバー」で招待リンクを発行して本人に渡します（メール送信サービスは不要）。
+- パスワードは 10 文字以上・英数字混在。scrypt でハッシュ化して保存。
+- 権限は 2 種類。**管理者**（取り込み・ルール・割当・設定・書き出し・バックアップ）と **担当者**（フォロー・ダッシュボード・書き出し）。
+- メールアドレスなしのメンバーは「担当者としてだけ」存在し、ログインはしません。
+
+### セキュリティ対策の一覧
+
+| 項目 | 実装 |
+| --- | --- |
+| セッション | ランダム ID を SHA-256 で保存。Cookie は HttpOnly / SameSite=Lax / HTTPS 時は Secure。14 日で失効、停止・再設定で即失効 |
+| CSRF | 状態を変える API は `X-Requested-With: fetch` ヘッダ必須。Origin ヘッダがホストと違えば拒否 |
+| 総当たり | ログインは IP あたり 30 回・メールあたり 10 回／15 分。存在しないメールでも同じ応答 |
+| ヘッダ | CSP（自ホストのスクリプトのみ）、X-Frame-Options DENY、nosniff、Referrer-Policy、HSTS（HTTPS 時） |
+| 権限 | 管理操作はサーバー側で管理者を検証。フォロー記録の記録者はログインユーザーに固定 |
+| 監査 | ログイン・招待・取り込み・削除・バックアップ等を `audit_log` に記録（設定 API から参照） |
+| バックアップ | 起動時と 24 時間ごとにオンラインバックアップ、14 世代保持。管理者は画面からダウンロード可 |
+| 入力 | JSON 20MB 上限、正規表現ルールの事前検証、メール形式検証 |
 
 ### 画面の流れ
 
@@ -40,7 +63,7 @@ npm start         # http://localhost:3000
   - **既存ランク → セグメント**: 値が A/B/C などセグメントのコードや表示名に一致すれば、ルールより優先して固定します。一致しないランク（例: S、F）はルール判定に回り、取り込み結果に件数が出るので、必要なら設定でセグメントを追加して取り込み直してください。
   - **担当者名 → フォロー担当**: 名前が一致する担当者に割り当て、未登録なら自動登録します（チェックで無効化可）。
   - **対応メモ → 最終フォローメモ**: フォロー画面の「最終フォローメモ」として載ります。
-- スキャンアプリのアンケート列（`あなたの役職レベルは？`、`あなたの製品導入権限は？`）は初期ルールに組み込んであり、「導入権限がある」「経営・役員クラス」「本部長・部長クラス」は A、「課長クラス」「主任クラス」「導入に関与している」は B に振り分けます。
+- スキャンアプリのアンケート列（`あなたの役職レベルは？`、`あなたの製品導入権限は？`）は初期ルールに組み込んであり、「導入権限がある」「経営・役員クラス」「本部長・部長クラス」は A、「課長クラス」「主任クラス」「導入に関与している」は B に振り分けます。フォローは電話のみを前提にしており、B と C の違いは架電する順番と期限です。
 
 サンプルは `samples/expo_sample.csv`（主催者形式）と `samples/scanner_app_sample.csv`（スキャンアプリ＋チーム独自列）にあります。
 
@@ -77,9 +100,16 @@ npm start         # http://localhost:3000
 | 変数 | 既定 | 説明 |
 | --- | --- | --- |
 | `PORT` | 3000 | 待ち受けポート |
-| `DB_PATH` | `data/app.db` | SQLite ファイル。バックアップはこのファイルをコピーするだけ |
+| `DB_PATH` | `data/app.db` | SQLite ファイル |
+| `BACKUP_DIR` / `BACKUP_KEEP` | `data/backups` / 14 | 自動バックアップの場所と保持世代 |
+| `APP_URL` | なし | 招待リンクに使う外部 URL（未設定ならアクセス元ホストから組み立て） |
+| `TRUST_PROXY` | 1 | リバースプロキシ配下で X-Forwarded-* を信用する。直接公開なら 0 |
 | `GOOGLE_APPLICATION_CREDENTIALS` | なし | サービスアカウント JSON のパス |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | なし | サービスアカウント JSON の中身 |
+
+## クラウド配置
+
+`Dockerfile` と `render.yaml` を同梱しています。手順は [docs/deploy-render.md](docs/deploy-render.md)。
 
 ## 開発
 
@@ -92,13 +122,15 @@ npm test       # ルール判定・重複判定・CSV パーサ・API の結合�
 
 ```
 server/index.js            Express アプリ
-server/lib/db.js           スキーマ・初期セグメント/ルール
+server/lib/db.js           スキーマ・初期セグメント/ルール・マイグレーション
+server/lib/auth.js         パスワード・セッション・招待トークン・保護ミドルウェア
+server/lib/backup.js       日次バックアップ
 server/lib/segment.js      ルール判定エンジン・ラウンドロビン
 server/lib/dedupe.js       重複キーの正規化
 server/lib/export.js       Excel / CSV / シート用データ生成
 server/lib/gsheets.js      Google Sheets API（サービスアカウント）
 server/routes/*.js         API
-public/                    画面（index.html / app.js / styles.css / csv.js）
+public/                    画面（index.html / app.js / login.html / login.js / styles.css / csv.js）
 samples/expo_sample.csv    主催者 CSV のサンプル
 ```
 
@@ -108,11 +140,13 @@ samples/expo_sample.csv    主催者 CSV のサンプル
 - `POST /api/exhibitions/:id/reclassify` `{ overwrite_locked? }` ルール再判定
 - `POST /api/exhibitions/:id/assign` `{ member_ids, segment_codes?, mode }` ラウンドロビン割当
 - `GET  /api/leads?exhibition_id&assignee_id&segment&status&due=today|overdue&q` 一覧
-- `POST /api/leads/:id/activities` `{ status, note, next_call_at, member_id }` フォロー記録
+- `POST /api/leads/:id/activities` `{ status, note, next_call_at }` フォロー記録（記録者はログインユーザー）
+- `POST /api/auth/login` / `logout` / `setup` / `token/:token`、`POST /api/members/:id/invite` 招待・再設定リンク発行
+- `GET /api/backups/download` バックアップ取得（管理者）
 - `GET  /api/exhibitions/:id/summary` ダッシュボード用集計
 - `GET  /api/exhibitions/:id/export.xlsx` / `export.csv`、`POST .../export/gsheets { spreadsheet }`
 
 ## 既知の割り切り
 
-- 認証はありません。社内ネットワーク内での利用を想定しています。
-- 「自分」の選択はブラウザごと（localStorage）です。
+- クライアント企業ごとのデータ分離や閲覧専用アカウントはありません（クライアントへはスプレッドシート共有で対応）。
+- パスワード再設定はメール自動送信ではなく、管理者がリンクを発行して渡す方式です。

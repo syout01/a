@@ -1,0 +1,23 @@
+# Render Blueprint。ダッシュボードの「New → Blueprint」でこのリポジトリを選ぶと、
+# この内容で Web サービスと永続ディスクが作られます。
+services:
+  - type: web
+    name: expo-lead-followup
+    runtime: docker
+    plan: starter          # 永続ディスクには有料プラン（Starter 以上）が必要
+    region: singapore      # 日本に一番近いリージョン
+    healthCheckPath: /api/auth/status
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DB_PATH
+        value: /data/app.db
+      - key: BACKUP_DIR
+        value: /data/backups
+      - key: TZ
+        value: Asia/Tokyo
+      # 招待リンクに使う外部 URL。独自ドメインを付けたらここを変える
+      - key: APP_URL
+        sync: false
