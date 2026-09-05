@@ -2,7 +2,7 @@
 # この内容で Web サービスと永続ディスクが作られます。
 services:
   - type: web
-    name: expo-lead-followup
+    name: diglead
     runtime: docker
     plan: starter          # 永続ディスクには有料プラン（Starter 以上）が必要
     region: singapore      # 日本に一番近いリージョン
