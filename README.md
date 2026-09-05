@@ -104,8 +104,17 @@ seed を使わない場合は、最初にアクセスした人が「最初の管
 | `BACKUP_DIR` / `BACKUP_KEEP` | `data/backups` / 14 | 自動バックアップの場所と保持世代 |
 | `APP_URL` | なし | 招待リンクに使う外部 URL（未設定ならアクセス元ホストから組み立て） |
 | `TRUST_PROXY` | 1 | リバースプロキシ配下で X-Forwarded-* を信用する。直接公開なら 0 |
+| `GTM_ID` | なし | Google タグマネージャーのコンテナ ID。LP とサンクスページに差し込む |
+| `SLACK_WEBHOOK_URL` | なし | LP の相談フォーム送信を Slack に通知 |
 | `GOOGLE_APPLICATION_CREDENTIALS` | なし | サービスアカウント JSON のパス |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | なし | サービスアカウント JSON の中身 |
+
+## 公開ページ（LP）と相談フォーム
+
+- `/lp.html` はログイン不要の紹介ページ。`/lp-thanks.html` は送信完了ページ（広告のコンバージョン計測先）。
+- フォームは `POST /api/public/inquiry` に送られ、`inquiries` テーブルに保存。IP あたり 1 時間 5 件まで、ハニーポット付き。UTM と gclid も保存します。
+- 管理者は「設定 → LP からの相談」で一覧とステータス管理。`SLACK_WEBHOOK_URL` を設定すると Slack にも届きます。
+- 広告テストの設計は [docs/ads-test-plan.md](docs/ads-test-plan.md)。
 
 ## クラウド配置
 

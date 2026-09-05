@@ -549,7 +549,12 @@ async function renderSettings(view) {
         <h2>自分のパスワード</h2>
         <form id="pwForm" class="row"><input type="password" name="current" placeholder="現在のパスワード" autocomplete="current-password" required><input type="password" name="password" placeholder="新しいパスワード（10文字以上・英数字）" autocomplete="new-password" required><button class="primary">変更</button></form>
       </div>
-      ${isAdmin() ? `<div class="card">
+      ${isAdmin() ? `<div class="card" style="grid-column:1/-1">
+        <h2>LP からの相談</h2>
+        <p class="muted small">公開ページ（/lp.html）のフォームから届いた相談です。対応したらステータスを変えてください。</p>
+        <div class="scroll" id="inqList"><span class="muted">読み込み中…</span></div>
+      </div>
+      <div class="card">
         <h2>バックアップ</h2>
         <p class="muted small">毎日自動でサーバー内に 14 世代保存しています。手元にも定期的にダウンロードして保管してください。</p>
         <div class="row"><a href="/api/backups/download"><button class="primary">今すぐバックアップをダウンロード</button></a><span id="bkList" class="small muted"></span></div>
@@ -569,6 +574,16 @@ async function renderSettings(view) {
   $$('[data-toggle]').forEach((b) => { b.onclick = async () => { await api(`/api/members/${b.dataset.toggle}`, { method: 'PUT', body: { active: b.dataset.active !== '1' } }).catch(onErr); await loadBase(); renderSettings(view); }; });
   $$('[data-delmem]').forEach((b) => { b.onclick = async () => { if (!confirm('メンバーを削除しますか？（割当は未割当に戻ります。履歴は残ります）')) return; await api(`/api/members/${b.dataset.delmem}`, { method: 'DELETE' }).catch(onErr); await loadBase(); renderSettings(view); }; });
   $('#pwForm').onsubmit = async (ev) => { ev.preventDefault(); try { await api('/api/auth/password', { method: 'POST', body: Object.fromEntries(new FormData(ev.target)) }); ev.target.reset(); toast('パスワードを変更しました'); } catch (err) { onErr(err); } };
+  if (isAdmin()) api('/api/inquiries').then((rows) => {
+    const st = { new: '未対応', contacted: '連絡済み', meeting: '商談化', closed: '完了', spam: '対象外' };
+    $('#inqList').innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>受信</th><th>会社 / 氏名</th><th>連絡先</th><th>規模</th><th>内容</th><th>流入</th><th>状態</th></tr></thead><tbody>${rows.map((i) => `<tr>
+      <td class="small">${esc(fmtDt(i.created_at))}</td><td><b>${esc(i.company)}</b><br><span class="small">${esc(i.name)}</span></td>
+      <td class="small">${i.email ? `<a href="mailto:${esc(i.email)}">${esc(i.email)}</a><br>` : ''}${i.phone ? `<a href="tel:${esc(i.phone)}">${esc(i.phone)}</a>` : ''}</td>
+      <td class="small">${esc(i.scale || '')}</td><td class="small" style="max-width:280px;white-space:pre-wrap">${esc(i.message || '')}</td>
+      <td class="small muted">${esc(Object.entries(i.source || {}).filter(([k]) => k !== 'page').map(([k, v]) => `${k.replace('utm_', '')}=${v}`).join(' ').slice(0, 80))}</td>
+      <td><select data-inq="${i.id}">${Object.entries(st).map(([k, v]) => `<option value="${k}" ${i.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table>` : '<span class="muted">まだ相談はありません。</span>';
+    $$('[data-inq]').forEach((sel) => { sel.onchange = () => api(`/api/inquiries/${sel.dataset.inq}`, { method: 'PATCH', body: { status: sel.value } }).then(() => toast('更新しました')).catch(onErr); });
+  }).catch(() => {});
   if (isAdmin()) api('/api/backups').then((r) => { $('#bkList').textContent = r.files.length ? `サーバー内の最新：${r.files[0].file}（${r.files.length} 世代）` : 'サーバー内のバックアップはまだありません'; }).catch(() => {});
   if ($('#segForm')) $('#segForm').onsubmit = async (ev) => { ev.preventDefault(); const fd = new FormData(ev.target); const body = Object.fromEntries(fd); body.is_excluded = fd.get('is_excluded') ? 1 : 0; try { await api('/api/segments', { method: 'POST', body }); await loadBase(); renderSettings(view); } catch (err) { onErr(err); } };
   $$('[data-savseg]').forEach((b) => { b.onclick = async () => { const tr = b.closest('tr'); const body = { sort_order: +$('[data-f=sort_order]', tr).value, color: $('[data-f=color]', tr).value, label: $('[data-f=label]', tr).value, action: $('[data-f=action]', tr).value, is_excluded: $('[data-f=is_excluded]', tr).checked ? 1 : 0 }; try { await api(`/api/segments/${b.dataset.savseg}`, { method: 'PUT', body }); await loadBase(); toast('保存しました'); renderSettings(view); } catch (err) { onErr(err); } }; });

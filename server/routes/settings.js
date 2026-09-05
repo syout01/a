@@ -7,6 +7,7 @@ import { requireAdmin, issueToken, appUrl, destroyMemberSessions, audit, publicM
 import { normEmail } from './auth.js';
 import { runBackup, listBackups, backupDir } from '../lib/backup.js';
 import path from 'node:path';
+const safeJsonParse = (t) => { try { return t ? JSON.parse(t) : {}; } catch { return {}; } };
 
 export default function settingsRoutes(db) {
   const r = Router();
@@ -71,6 +72,18 @@ export default function settingsRoutes(db) {
     const token = issueToken(db, m.id, kind, req.user.id);
     audit(db, req, `token_${kind}`, m.id);
     res.json({ kind, url: `${appUrl(req)}/login.html#token=${token}`, expires_hours: kind === 'invite' ? 24 * 7 : 24 });
+  });
+  // LP からの相談
+  r.get('/inquiries', requireAdmin, (req, res) => {
+    res.json(db.prepare('SELECT * FROM inquiries ORDER BY id DESC LIMIT 500').all().map((i) => ({ ...i, source: safeJsonParse(i.source_json), source_json: undefined })));
+  });
+  r.patch('/inquiries/:id', requireAdmin, (req, res) => {
+    const cur = db.prepare('SELECT * FROM inquiries WHERE id = ?').get(req.params.id);
+    if (!cur) return res.status(404).json({ error: 'not found' });
+    const status = ['new', 'contacted', 'meeting', 'closed', 'spam'].includes(req.body?.status) ? req.body.status : cur.status;
+    const note = req.body?.note != null ? String(req.body.note).slice(0, 2000) : cur.note;
+    db.prepare('UPDATE inquiries SET status = ?, note = ? WHERE id = ?').run(status, note, cur.id);
+    res.json(db.prepare('SELECT * FROM inquiries WHERE id = ?').get(cur.id));
   });
   // 監査ログ（直近）
   r.get('/audit', requireAdmin, (req, res) => {

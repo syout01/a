@@ -123,6 +123,15 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
   created_by INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS inquiries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company TEXT, name TEXT, email TEXT, phone TEXT, scale TEXT, message TEXT,
+  source_json TEXT,
+  ip TEXT,
+  status TEXT NOT NULL DEFAULT 'new',
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   member_id INTEGER,
