@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>展示会リード フォロー管理</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">展示会リード フォロー管理</div>
+  <div class="topbar-controls">
+    <label>展示会
+      <select id="exhibitionSelect"></select>
+    </label>
+    <label>自分
+      <select id="meSelect"></select>
+    </label>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <a href="#/import">① 取り込み</a>
+  <a href="#/rules">② 振り分けルール</a>
+  <a href="#/assign">③ 担当割当</a>
+  <a href="#/follow">④ フォロー</a>
+  <a href="#/dashboard">⑤ ダッシュボード</a>
+  <a href="#/export">⑥ 書き出し</a>
+  <a href="#/settings">設定</a>
+</nav>
+<main id="view" class="view"></main>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
